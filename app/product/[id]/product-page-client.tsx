@@ -62,7 +62,10 @@ export default function ProductPageClient({ product, relatedProducts }: ProductP
           <div className="flex items-center justify-between h-16 lg:h-20">
                          <Button
                variant="ghost"
-               onClick={() => router.back()}
+               onClick={() => {
+                 // Navigate with a parameter to skip loading screen
+                 router.push('/?fromProduct=true', { scroll: false })
+               }}
                className="flex items-center gap-2 p-3 text-white hover:bg-[#F7DD0F]/10 hover:text-[#F7DD0F] transition-all duration-300 rounded-xl"
              >
                <ArrowLeft className="w-5 h-5" />

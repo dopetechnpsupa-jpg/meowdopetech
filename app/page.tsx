@@ -341,6 +341,24 @@ export default function DopeTechEcommerce() {
     setIsAppReady(true)
   }, [])
 
+  // Check if coming from product page to skip splash screen
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const fromProduct = urlParams.get('fromProduct')
+      
+      if (fromProduct === 'true') {
+        // Skip splash screen when coming from product page
+        setShowSplash(false)
+        setIsAppReady(true)
+        
+        // Clean up the URL parameter
+        const newUrl = window.location.pathname
+        window.history.replaceState({}, '', newUrl)
+      }
+    }
+  }, [])
+
   // Optimized scroll handler with passive listener
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1472,9 +1490,9 @@ export default function DopeTechEcommerce() {
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-sm sm:text-base price-proxima-nova text-yellow-400">
-                          Rs {product.price.toLocaleString()}
+                          Rs {product.discount > 0 ? Math.round(product.original_price * (1 - product.discount / 100)).toLocaleString() : product.price.toLocaleString()}
                         </span>
-                        {product.original_price > product.price && (
+                        {(product.original_price > product.price || product.discount > 0) && (
                           <span className="text-xs price-proxima-nova text-gray-400 line-through">
                             Rs {product.original_price.toLocaleString()}
                           </span>
@@ -1567,9 +1585,26 @@ export default function DopeTechEcommerce() {
                   {/* Text Section */}
                   <div className="text-center">
                     {/* Product Name - Bigger Text */}
-                    <h3 className="text-black font-bold text-base sm:text-lg md:text-xl lg:text-2xl mb-1 line-clamp-2">
+                    <h3 className="text-black font-bold text-base sm:text-lg md:text-xl lg:text-2xl mb-2 line-clamp-2">
                       {product.name}
                     </h3>
+                    
+                    {/* Price Section */}
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-lg sm:text-xl md:text-2xl price-proxima-nova text-black font-bold">
+                        Rs {product.discount > 0 ? Math.round(product.original_price * (1 - product.discount / 100)).toLocaleString() : product.price.toLocaleString()}
+                      </span>
+                      {(product.original_price > product.price || product.discount > 0) && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm sm:text-base price-kelpt-a2 text-gray-600 line-through">
+                            Rs {product.original_price.toLocaleString()}
+                          </span>
+                          <span className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+                            {product.discount > 0 ? product.discount : Math.round(((product.original_price - product.price) / product.original_price) * 100)}% OFF
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
