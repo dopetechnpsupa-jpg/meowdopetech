@@ -29,6 +29,7 @@ export interface Product {
   in_stock: boolean;
   discount: number;
   hidden_on_home?: boolean;
+  created_at?: string; // Optional field for database products
 }
 
 // Sample fallback products data
@@ -500,6 +501,180 @@ export async function getProductsWithImages(): Promise<Product[]> {
   } catch (error) {
     console.error('Error fetching products with images:', error);
     return [];
+  }
+}
+
+// Get products by categories for Dope Arrivals (4 products per category)
+export async function getDopeArrivalsByCategories(): Promise<{ [category: string]: Product[] }> {
+  try {
+    console.log('🔗 Fetching Dope Arrivals from Supabase...')
+    
+    // Add timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 10000)
+    })
+    
+    const supabasePromise = supabase
+      .from('products')
+      .select('*')
+      .eq('hidden_on_home', false)
+      .order('id', { ascending: false }); // Order by ID descending to get newest first
+
+    const { data, error } = await Promise.race([supabasePromise, timeoutPromise]) as any;
+
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
+
+    console.log('✅ Dope Arrivals query successful')
+    console.log('📦 Products received:', data?.length || 0)
+    
+    // If no data, use fallback
+    const products = data || fallbackProducts;
+    
+    // Group products by category and limit to 4 per category
+    const groupedProducts: { [category: string]: Product[] } = {};
+    
+    products.forEach((product: Product) => {
+      const category = product.category;
+      if (!groupedProducts[category]) {
+        groupedProducts[category] = [];
+      }
+      
+      // Only add if we haven't reached the limit of 4 per category
+      if (groupedProducts[category].length < 4) {
+        groupedProducts[category].push(product);
+      }
+    });
+    
+    console.log('📋 Categories found:', Object.keys(groupedProducts));
+    
+    return groupedProducts;
+  } catch (error) {
+    console.error('❌ Error fetching Dope Arrivals:', error);
+    
+    // Fallback: Group fallback products by category
+    const groupedFallback: { [category: string]: Product[] } = {};
+    fallbackProducts.forEach((product: Product) => {
+      const category = product.category;
+      if (!groupedFallback[category]) {
+        groupedFallback[category] = [];
+      }
+      if (groupedFallback[category].length < 4) {
+        groupedFallback[category].push(product);
+      }
+    });
+    
+    return groupedFallback;
+  }
+}
+
+// Get random product for daily advertisement (same product for entire day)
+export async function getDailyAdProduct(): Promise<Product | null> {
+  try {
+    console.log('🔗 Fetching daily ad product from Supabase...')
+    
+    // Add timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 10000)
+    })
+    
+    const supabasePromise = supabase
+      .from('products')
+      .select('*')
+      .eq('hidden_on_home', false)
+      .order('id', { ascending: true });
+
+    const { data, error } = await Promise.race([supabasePromise, timeoutPromise]) as any;
+
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
+
+    console.log('✅ Daily ad products query successful')
+    
+    // If no data, use fallback
+    const products = data || fallbackProducts;
+    
+    if (products.length === 0) {
+      return null;
+    }
+    
+    // Use current date as seed for consistent daily selection
+    const today = new Date();
+    const dateString = today.getFullYear().toString() + 
+                      (today.getMonth() + 1).toString().padStart(2, '0') + 
+                      today.getDate().toString().padStart(2, '0');
+    
+    // Simple hash function using date string
+    let hash = 0;
+    for (let i = 0; i < dateString.length; i++) {
+      const char = dateString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Get random index based on hash
+    const randomIndex = Math.abs(hash) % products.length;
+    
+    console.log(`📅 Daily ad product selected: ${products[randomIndex].name} (index: ${randomIndex})`);
+    
+    return products[randomIndex] as Product;
+  } catch (error) {
+    console.error('❌ Error fetching daily ad product:', error);
+    
+    // Fallback: return a random product from fallback data
+    if (fallbackProducts.length > 0) {
+      const today = new Date();
+      const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+      const randomIndex = dayOfYear % fallbackProducts.length;
+      return fallbackProducts[randomIndex];
+    }
+    
+    return null;
+  }
+}
+
+// Get the latest 5 added products (ordered by ID descending) - keeping for backward compatibility
+export async function getLatestProducts(maxCount: number = 5): Promise<Product[]> {
+  try {
+    console.log('🔗 Fetching latest products from Supabase...')
+    
+    // Add timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 10000)
+    })
+    
+    const supabasePromise = supabase
+      .from('products')
+      .select('*')
+      .eq('hidden_on_home', false)
+      .order('id', { ascending: false }) // Order by ID descending to get newest first
+      .limit(maxCount);
+
+    const { data, error } = await Promise.race([supabasePromise, timeoutPromise]) as any;
+
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
+
+    console.log('✅ Latest products query successful')
+    console.log('📦 Latest products received:', data?.length || 0)
+    
+    // If no data, return empty array
+    if (!data || data.length === 0) {
+      console.log('⚠️ No latest products found')
+      return [];
+    }
+    
+    return (data as unknown as Product[]) || [];
+  } catch (error) {
+    console.error('❌ Error fetching latest products:', error);
+    // Return latest from fallback products (last 5 by ID)
+    return fallbackProducts.slice(-maxCount).reverse();
   }
 }
 

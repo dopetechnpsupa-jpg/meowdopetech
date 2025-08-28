@@ -37,7 +37,7 @@ import {
 // Removed CursorTracker (opt-in effect)
 import LazyAIChat from "@/components/lazy-ai-chat"
 import SupabaseCheckout from "@/components/supabase-checkout"
-import { getProducts, getDopePicks, getWeeklyPicks, type Product, getPrimaryImageUrl } from "@/lib/products-data"
+import { getProducts, getDopePicks, getWeeklyPicks, getLatestProducts, getDopeArrivalsByCategories, getDailyAdProduct, type Product, getPrimaryImageUrl } from "@/lib/products-data"
 import { getCategories, syncCategoriesWithDatabase } from "@/lib/categories-data"
 import { useCart } from "@/contexts/cart-context"
 import { CartItemEditor } from "@/components/cart-item-editor"
@@ -174,7 +174,7 @@ const SplashScreen = ({ isVisible, onComplete }: { isVisible: boolean, onComplet
         setCurrentIconIndex(prev => {
           const nextIndex = prev + 2
           // Skip "All Products" (index 0) and only cycle through specific categories
-          const filteredCategories = categories.filter(cat => cat.id !== "all")
+          const filteredCategories = categories.filter((cat: { id: string; name: string }) => cat.id !== "all")
           return nextIndex >= filteredCategories.length ? 0 : nextIndex
         })
         setTimeout(() => setIsIconTransitioning(false), 100)
@@ -191,7 +191,7 @@ const SplashScreen = ({ isVisible, onComplete }: { isVisible: boolean, onComplet
   if (!isVisible) return null
 
   // Filter out "All Products" and get the current category
-  const filteredCategories = categories.filter(cat => cat.id !== "all")
+  const filteredCategories = categories.filter((cat: { id: string; name: string }) => cat.id !== "all")
   const currentCategory = filteredCategories[currentIconIndex] || filteredCategories[0]
   const CurrentIcon = currentCategory.icon
 
@@ -265,6 +265,9 @@ export default function DopeTechEcommerce() {
   const [products, setProducts] = useState<Product[]>([])
   const [dopePicks, setDopePicks] = useState<Product[]>([])
   const [weeklyPicks, setWeeklyPicks] = useState<Product[]>([])
+  const [latestProducts, setLatestProducts] = useState<Product[]>([])
+  const [dopeArrivals, setDopeArrivals] = useState<{ [category: string]: Product[] }>({})
+  const [dailyAdProduct, setDailyAdProduct] = useState<Product | null>(null)
   
   // Fluid navigation hooks
   const { navigateWithTransition, isNavigating } = useFluidNavigation()
@@ -497,7 +500,64 @@ export default function DopeTechEcommerce() {
       }
     }
 
+    const fetchLatestProducts = async () => {
+      try {
+        // Fetching latest products from Supabase
+        
+        const latestProductsData = await getLatestProducts(5)
+        
+        if (isMounted) {
+          // Latest products fetched successfully
+          setLatestProducts(latestProductsData)
+        }
+      } catch (error) {
+        console.error('❌ Error fetching latest products:', error)
+        if (isMounted) {
+          setLatestProducts([])
+        }
+      }
+    }
+
+    const fetchDopeArrivals = async () => {
+      try {
+        // Fetching Dope Arrivals by categories from Supabase
+        
+        const dopeArrivalsData = await getDopeArrivalsByCategories()
+        
+        if (isMounted) {
+          // Dope Arrivals fetched successfully
+          setDopeArrivals(dopeArrivalsData)
+        }
+      } catch (error) {
+        console.error('❌ Error fetching Dope Arrivals:', error)
+        if (isMounted) {
+          setDopeArrivals({})
+        }
+      }
+    }
+
+    const fetchDailyAdProduct = async () => {
+      try {
+        // Fetching daily ad product from Supabase
+        
+        const dailyAdData = await getDailyAdProduct()
+        
+        if (isMounted) {
+          // Daily ad product fetched successfully
+          setDailyAdProduct(dailyAdData)
+        }
+      } catch (error) {
+        console.error('❌ Error fetching daily ad product:', error)
+        if (isMounted) {
+          setDailyAdProduct(null)
+        }
+      }
+    }
+
     fetchDopePicks()
+    fetchLatestProducts()
+    fetchDopeArrivals()
+    fetchDailyAdProduct()
 
     return () => {
       isMounted = false
@@ -1410,6 +1470,82 @@ export default function DopeTechEcommerce() {
               />
             </div>
             
+            {/* Daily Advertisement Banner */}
+            {dailyAdProduct && (
+              <div className="mb-4 sm:mb-6 md:mb-8 lg:mb-10 mx-2 sm:mx-4 md:mx-6 lg:mx-8">
+                <div 
+                  className="relative bg-gradient-to-r from-[#F7DD0F] to-[#FFE55C] rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl hover:shadow-[#F7DD0F]/30 transition-all duration-500 hover:scale-[1.02] cursor-pointer group"
+                  onClick={() => router.push(`/product/${dailyAdProduct.id}`)}
+                >
+                  {/* Banner Content */}
+                  <div className="relative min-h-[180px] sm:min-h-[200px] md:min-h-[250px] lg:min-h-[300px] xl:min-h-[350px] flex items-center">
+                    
+                    {/* Left Side - Product Image */}
+                    <div className="absolute left-0 top-0 w-1/2 h-full flex items-center justify-center p-2 sm:p-4 md:p-6 lg:p-8">
+                      <div className="relative w-full h-full max-w-xs sm:max-w-sm bg-white rounded-lg sm:rounded-2xl shadow-lg sm:shadow-2xl overflow-hidden group-hover:scale-105 transition-transform duration-500">
+                        <img
+                          src={getPrimaryImageUrl(dailyAdProduct)}
+                          alt={dailyAdProduct.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/products/placeholder.png';
+                          }}
+                        />
+                        
+                        {/* Discount Badge */}
+                        {dailyAdProduct.discount > 0 && (
+                          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-red-500 text-white text-xs sm:text-sm md:text-base font-bold px-2 py-1 sm:px-3 sm:py-2 rounded-full shadow-lg animate-pulse">
+                            -{dailyAdProduct.discount}% OFF
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right Side - Product Info */}
+                    <div className="absolute right-0 top-0 w-1/2 h-full flex flex-col justify-center p-2 sm:p-4 md:p-6 lg:p-8 xl:p-12">
+                      <div className="text-black">
+                        {/* Daily Special Tag */}
+                        <div className="inline-flex items-center bg-black text-[#F7DD0F] px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-bold mb-1 sm:mb-2 md:mb-4 animate-fade-in-up">
+                          🌟 Dope Daily Picks
+                        </div>
+                        
+                        {/* Product Name */}
+                        <h2 className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-bold mb-1 sm:mb-2 md:mb-4 leading-tight animate-fade-in-up line-clamp-2" style={{ animationDelay: '0.2s' }}>
+                          {dailyAdProduct.name}
+                        </h2>
+                        
+                        {/* Product Description - Hidden on very small screens */}
+                        <p className="hidden sm:block text-xs sm:text-sm md:text-base text-black/80 mb-2 sm:mb-3 md:mb-6 line-clamp-2 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                          {dailyAdProduct.description}
+                        </p>
+                        
+                        {/* Price */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 md:gap-4 mb-2 sm:mb-4 md:mb-6 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+                          <span className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold text-black">
+                            Rs {dailyAdProduct.discount > 0 ? Math.round(dailyAdProduct.original_price * (1 - dailyAdProduct.discount / 100)).toLocaleString() : dailyAdProduct.price.toLocaleString()}
+                          </span>
+                          {(dailyAdProduct.original_price > dailyAdProduct.price || dailyAdProduct.discount > 0) && (
+                            <span className="text-xs sm:text-sm md:text-base text-black/60 line-through">
+                              Rs {dailyAdProduct.original_price.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* CTA Button */}
+                        <button className="bg-black text-[#F7DD0F] px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 lg:px-8 lg:py-4 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm md:text-base lg:text-lg hover:bg-black/90 transition-all duration-300 shadow-lg hover:shadow-xl animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
+                          Shop Now →
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Background Pattern/Texture */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#F7DD0F]/5 to-transparent opacity-50 pointer-events-none"></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Dope Categories Header - Mobile Optimized Spacing */}
             <div className="text-center mb-4 sm:mb-4 animate-fade-in-up stagger-4 px-2 sm:px-4">
                                                              <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl xl:text-4xl text-kelpt-a2 text-white mb-1 sm:mb-3 text-shadow">
@@ -1552,6 +1688,107 @@ export default function DopeTechEcommerce() {
           </div>
         </div>
       </section>
+
+      {/* Dope Arrivals Section */}
+      {Object.keys(dopeArrivals).length > 0 && (
+        <section className="py-6 sm:py-8 md:py-10 lg:py-12 overflow-hidden relative" style={{ background: 'linear-gradient(135deg, #F7DD0F 0%, #FFE55C 50%, #F7DD0F 100%)' }}>
+          <div className="container-full">
+            <div className="w-full mx-auto animate-fade-in-up">
+              {/* Section Header */}
+              <div className="text-center mb-6 sm:mb-8 md:mb-10 px-2 sm:px-4">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl text-black mb-2 sm:mb-3 md:mb-4 text-shadow font-bold">
+                  Recent <span className="text-black font-extrabold">Dope Drops</span>
+                </h2>
+                <p className="text-base sm:text-lg md:text-xl text-black/80 font-medium">
+                  Fresh tech by categories
+                </p>
+              </div>
+
+              {/* Categories Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8 md:gap-10 px-4 sm:px-6 md:px-8">
+                {Object.entries(dopeArrivals).map(([categoryName, categoryProducts], categoryIndex) => (
+                  <div
+                    key={categoryName}
+                    className="group relative bg-black/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-500 hover:transform hover:scale-[1.02] animate-fade-in-up overflow-hidden border border-[#F7DD0F]/20"
+                    style={{ animationDelay: `${categoryIndex * 150}ms` }}
+                  >
+                    {/* Category Header */}
+                    <div className="bg-gradient-to-r from-[#F7DD0F]/10 to-[#F7DD0F]/20 p-4 sm:p-6 border-b border-[#F7DD0F]/20">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg sm:text-xl font-bold text-[#F7DD0F] capitalize">
+                          {categoryName.replace(/_/g, ' ')}
+                        </h3>
+                        <div className="bg-black text-[#F7DD0F] text-xs px-2 py-1 rounded-full font-semibold">
+                          {categoryProducts.length}
+                        </div>
+                      </div>
+                      <p className="text-sm text-white/70 mt-1">Latest arrivals</p>
+                    </div>
+
+                    {/* Products Grid with Images */}
+                    <div className="p-4 sm:p-6">
+                      <div className="grid grid-cols-2 gap-3">
+                        {categoryProducts.slice(0, 4).map((product, productIndex) => (
+                          <div
+                            key={product.id}
+                            className="group/item relative bg-gray-900 rounded-lg border border-[#F7DD0F]/20 overflow-hidden hover:shadow-md transition-all duration-300 hover:transform hover:scale-[1.02] hover:border-[#F7DD0F]/40 cursor-pointer"
+                            onClick={() => router.push(`/product/${product.id}`)}
+                          >
+                            {/* Product Image */}
+                            <div className="aspect-square bg-gray-800 relative overflow-hidden">
+                              <img
+                                src={getPrimaryImageUrl(product)}
+                                alt={product.name}
+                                className="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = '/products/placeholder.png';
+                                }}
+                              />
+                              
+                              {/* Discount Badge */}
+                              {product.discount > 0 && (
+                                <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                                  -{product.discount}%
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Product Info */}
+                            <div className="p-2 bg-black">
+                              <h4 className="text-xs font-semibold text-white group-hover/item:text-[#F7DD0F] transition-colors duration-300 line-clamp-2 leading-tight">
+                                {product.name}
+                              </h4>
+                              <p className="text-xs text-white/60 mt-1 font-medium">
+                                Rs {product.discount > 0 ? Math.round(product.original_price * (1 - product.discount / 100)).toLocaleString() : product.price.toLocaleString()}
+                              </p>
+                            </div>
+
+                            {/* Hover Effect Overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#F7DD0F]/10 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* View All Button */}
+                      {categoryProducts.length > 4 && (
+                        <div className="mt-4 pt-4 border-t border-[#F7DD0F]/20">
+                          <button className="w-full text-center text-[#F7DD0F] hover:text-white text-sm font-medium transition-colors duration-300 bg-[#F7DD0F]/10 hover:bg-[#F7DD0F]/20 py-2 rounded-lg">
+                            View All {categoryProducts.length} Items →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hover Effect Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#F7DD0F]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-2xl"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
              {/* Dope Weekly Picks Section - Mobile Optimized Spacing */}
        <section className="pt-1 sm:pt-6 md:pt-8 lg:pt-10 pb-2 sm:pb-10 md:pb-12 lg:pb-16 overflow-hidden relative section-slide-in" style={{ background: 'linear-gradient(135deg, #000000 0%, #1a1a0a 50%, #000000 100%)' }}>
