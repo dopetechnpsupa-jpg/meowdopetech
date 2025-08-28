@@ -17,7 +17,8 @@ import {
   Upload,
   Video,
   QrCode,
-  RefreshCw
+  RefreshCw,
+  FolderOpen
 } from 'lucide-react'
 import { supabaseAdmin } from '@/lib/supabase'
 import { Product, ProductImage, getProducts, addProduct, updateProduct, deleteProduct, getProductImages, addProductImage, deleteProductImage, setPrimaryImage, reorderProductImages } from '@/lib/products-data'
@@ -27,6 +28,7 @@ import { HeroImageManager } from '@/components/hero-image-manager'
 import { QRCodeManager } from '@/components/qr-code-manager'
 import { OrdersManager } from '@/components/orders-manager'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { CategoryManagerDB } from '@/components/category-manager-db'
 import { useToast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -95,23 +97,49 @@ export default function AdminPage() {
   const [productImages, setProductImages] = useState<ProductImage[]>([])
   const [newProductImages, setNewProductImages] = useState<ProductImage[]>([])
   
-  // Predefined categories
-  const categories = [
-    'keyboard',
-    'mouse', 
-    'audio',
-    'monitor',
-    'speaker',
-    'camera',
-    'cable',
-    'laptop',
-    'smartphone',
-    'gamepad',
-    'headphones',
-    'microphone',
-    'webcam',
-    'accessories'
-  ]
+  // Dynamic categories from localStorage
+  const [categories, setCategories] = useState<string[]>([])
+  
+  // Load categories from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('adminCategories')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          const categoryIds = parsed.map((cat: { id: string; name: string }) => cat.id).filter((id: string) => id !== 'all')
+          setCategories(categoryIds)
+        } else {
+          // Set default categories if none exist
+          setCategories(['keyboard', 'mouse', 'audio', 'monitor', 'speaker', 'camera', 'cable', 'laptop', 'smartphone', 'gamepad', 'headphones', 'microphone', 'webcam', 'accessories'])
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error)
+        setCategories(['keyboard', 'mouse', 'audio', 'monitor', 'speaker', 'camera', 'cable', 'laptop', 'smartphone', 'gamepad', 'headphones', 'microphone', 'webcam', 'accessories'])
+      }
+    }
+  }, [])
+
+  // Listen for category updates
+  useEffect(() => {
+    const handleCategoriesUpdate = () => {
+      if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('adminCategories')
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            const categoryIds = parsed.map((cat: { id: string; name: string }) => cat.id).filter((id: string) => id !== 'all')
+            setCategories(categoryIds)
+          }
+        } catch (error) {
+          console.error('Error updating categories:', error)
+        }
+      }
+    }
+
+    window.addEventListener('categoriesUpdated', handleCategoriesUpdate)
+    return () => window.removeEventListener('categoriesUpdated', handleCategoriesUpdate)
+  }, [])
 
   // Form states
   const [formData, setFormData] = useState({
@@ -610,6 +638,17 @@ export default function AdminPage() {
               <QrCode className="w-4 h-4" />
               <span>QR Codes</span>
             </button>
+            <button
+              onClick={() => setActiveTab("categories")}
+              className={`flex items-center space-x-1 sm:space-x-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-200 font-medium whitespace-nowrap text-sm sm:text-base ${
+                activeTab === "categories"
+                  ? "bg-[#F7DD0F] text-black shadow-lg"
+                  : "text-gray-300 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span>Categories</span>
+            </button>
           </div>
         </div>
 
@@ -825,6 +864,21 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Categories Tab */}
+        {activeTab === "categories" && (
+          <div className="space-y-6 sm:space-y-8">
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+              <div className="flex items-center space-x-3 mb-4 sm:mb-6">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+                  <FolderOpen className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-semibold text-white">Category Management</h3>
+              </div>
+              <CategoryManagerDB />
+            </div>
+          </div>
+        )}
+
         {/* Orders & Receipts Tab */}
         {activeTab === "orders" && (
           <ErrorBoundary>
@@ -1032,11 +1086,28 @@ export default function AdminPage() {
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select a category</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category} className="bg-gray-800 text-white">
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </option>
-                  ))}
+                  {(() => {
+                    try {
+                      const stored = localStorage.getItem('adminCategories')
+                      if (stored) {
+                        const parsed = JSON.parse(stored)
+                        return parsed
+                          .filter((cat: { id: string; name: string }) => cat.id !== 'all')
+                          .map((cat: { id: string; name: string }) => (
+                            <option key={cat.id} value={cat.id} className="bg-gray-800 text-white">
+                              {cat.name}
+                            </option>
+                          ))
+                      }
+                    } catch (error) {
+                      console.error('Error loading category names:', error)
+                    }
+                    return categories.map((category) => (
+                      <option key={category} value={category} className="bg-gray-800 text-white">
+                        {category.charAt(0).toUpperCase() + category.slice(1)}
+                      </option>
+                    ))
+                  })()}
                 </select>
               </div>
               

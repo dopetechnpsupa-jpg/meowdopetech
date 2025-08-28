@@ -38,6 +38,7 @@ import {
 import LazyAIChat from "@/components/lazy-ai-chat"
 import SupabaseCheckout from "@/components/supabase-checkout"
 import { getProducts, getDopePicks, getWeeklyPicks, type Product, getPrimaryImageUrl } from "@/lib/products-data"
+import { getCategories, syncCategoriesWithDatabase } from "@/lib/categories-data"
 import { useCart } from "@/contexts/cart-context"
 import { CartItemEditor } from "@/components/cart-item-editor"
 import { supabase } from "@/lib/supabase"
@@ -1098,10 +1099,47 @@ export default function DopeTechEcommerce() {
     { id: "accessory", name: "Accessories", icon: Cable },
   ])
 
-  // Initialize categories from localStorage or use defaults
+  // Initialize categories from database
   useEffect(() => {
-    const adminCategories = getCategories()
-    setCategories(adminCategories)
+    const loadCategoriesFromDB = async () => {
+      try {
+        const dbCategories = await getCategories()
+        if (dbCategories.length > 0) {
+          setCategories(dbCategories)
+          // Also sync with localStorage for backward compatibility
+          await syncCategoriesWithDatabase()
+        } else {
+          // Fallback to localStorage if database is empty
+          const adminCategories = getCategories()
+          setCategories(adminCategories)
+        }
+      } catch (error) {
+        console.error('Error loading categories from database:', error)
+        // Fallback to localStorage
+        const adminCategories = getCategories()
+        setCategories(adminCategories)
+      }
+    }
+
+    loadCategoriesFromDB()
+  }, [])
+
+  // Listen for category updates from admin panel
+  useEffect(() => {
+    const handleCategoriesUpdate = async () => {
+      try {
+        const dbCategories = await getCategories()
+        setCategories(dbCategories)
+      } catch (error) {
+        console.error('Error updating categories:', error)
+        // Fallback to localStorage
+        const adminCategories = getCategories()
+        setCategories(adminCategories)
+      }
+    }
+
+    window.addEventListener('categoriesUpdated', handleCategoriesUpdate)
+    return () => window.removeEventListener('categoriesUpdated', handleCategoriesUpdate)
   }, [])
 
   // Optimized category icon cycling
